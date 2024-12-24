@@ -1,0 +1,161 @@
+import sqlite3
+import tkinter as tk
+from tkinter import messagebox
+
+
+# Создание базы данных и подключение
+conn = sqlite3.connect('staff_schedule.db')
+cursor = conn.cursor()
+
+# Создание таблиц
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS Departments (
+    department_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    department_name TEXT NOT NULL,
+    allowance_percentage REAL NOT NULL
+)
+''')
+
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS StaffUnits (
+    staff_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    position_name TEXT NOT NULL,
+    base_salary REAL NOT NULL,
+    allowance_unregulated REAL NOT NULL,
+    department_id INTEGER NOT NULL,
+    FOREIGN KEY (department_id) REFERENCES Departments(department_id)
+)
+''')
+
+conn.commit()
+
+
+# Функции для добавления данных
+
+# Добавление подразделения
+def add_department():
+    def save_department():
+        try:
+            department_name = department_name_entry.get()
+            allowance_percentage = float(allowance_entry.get())
+
+            cursor.execute(
+                "INSERT INTO Departments (department_name, allowance_percentage) VALUES (?, ?)",
+                (department_name, allowance_percentage)
+            )
+            conn.commit()
+            messagebox.showinfo("Успех", "Подразделение успешно добавлено!")
+            add_department_window.destroy()
+        except ValueError:
+            messagebox.showerror("Ошибка", "Пожалуйста, введите корректные данные!")
+
+    add_department_window = tk.Toplevel(root)
+    add_department_window.title("Добавить подразделение")
+
+    tk.Label(add_department_window, text="Название подразделения:").pack(pady=5)
+    department_name_entry = tk.Entry(add_department_window)
+    department_name_entry.pack(pady=5)
+
+    tk.Label(add_department_window, text="Процент надбавки за вредные условия труда (%):").pack(pady=5)
+    allowance_entry = tk.Entry(add_department_window)
+    allowance_entry.pack(pady=5)
+
+    tk.Button(add_department_window, text="Сохранить", command=save_department).pack(pady=10)
+
+
+# Добавление штатной единицы
+def add_staff_unit():
+    def save_staff_unit():
+        try:
+            position_name = position_name_entry.get()
+            base_salary = float(base_salary_entry.get())
+            allowance_unregulated = float(allowance_unregulated_entry.get())
+            department_id = int(department_id_entry.get())
+
+            # Проверяем, существует ли указанный отдел
+            cursor.execute("SELECT department_id FROM Departments WHERE department_id = ?", (department_id,))
+            if cursor.fetchone() is None:
+                messagebox.showerror("Ошибка", "Указанный отдел не существует!")
+                return
+
+            cursor.execute(
+                "INSERT INTO StaffUnits (position_name, base_salary, allowance_unregulated, department_id) VALUES (?, ?, ?, ?)",
+                (position_name, base_salary, allowance_unregulated, department_id)
+            )
+            conn.commit()
+            messagebox.showinfo("Успех", "Штатная единица успешно добавлена!")
+            add_staff_unit_window.destroy()
+        except ValueError:
+            messagebox.showerror("Ошибка", "Пожалуйста, введите корректные данные!")
+
+    add_staff_unit_window = tk.Toplevel(root)
+    add_staff_unit_window.title("Добавить штатную единицу")
+
+    tk.Label(add_staff_unit_window, text="Название должности:").pack(pady=5)
+    position_name_entry = tk.Entry(add_staff_unit_window)
+    position_name_entry.pack(pady=5)
+
+    tk.Label(add_staff_unit_window, text="Оклад (руб.):").pack(pady=5)
+    base_salary_entry = tk.Entry(add_staff_unit_window)
+    base_salary_entry.pack(pady=5)
+
+    tk.Label(add_staff_unit_window, text="Надбавка за ненормированный рабочий день (%):").pack(pady=5)
+    allowance_unregulated_entry = tk.Entry(add_staff_unit_window)
+    allowance_unregulated_entry.pack(pady=5)
+
+    tk.Label(add_staff_unit_window, text="ID подразделения:").pack(pady=5)
+    department_id_entry = tk.Entry(add_staff_unit_window)
+    department_id_entry.pack(pady=5)
+
+    tk.Button(add_staff_unit_window, text="Сохранить", command=save_staff_unit).pack(pady=10)
+
+
+# Функции для расчета заработной платы
+def calculate_salaries():
+    cursor.execute('''
+    SELECT 
+        StaffUnits.position_name,
+        StaffUnits.base_salary,
+        Departments.allowance_percentage,
+        StaffUnits.allowance_unregulated,
+        (StaffUnits.base_salary * (1 + (Departments.allowance_percentage + StaffUnits.allowance_unregulated) / 100)) AS gross_salary,
+        ((StaffUnits.base_salary * (1 + (Departments.allowance_percentage + StaffUnits.allowance_unregulated) / 100)) * 0.87) AS net_salary
+    FROM StaffUnits
+    JOIN Departments ON StaffUnits.department_id = Departments.department_id
+    ''')
+    salaries = cursor.fetchall()
+
+    output_text.delete(1.0, tk.END)
+    output_text.insert(tk.END, "Расчет заработной платы:\n")
+    output_text.insert(tk.END, "-------------------------------------------\n")
+    for row in salaries:
+        position, base, harmful, unregulated, gross, net = row
+        output_text.insert(tk.END, f"Должность: {position}\n")
+        output_text.insert(tk.END, f"Оклад: {base:.2f} руб.\n")
+        output_text.insert(tk.END, f"Надбавка за вредные условия: {harmful:.2f}%\n")
+        output_text.insert(tk.END, f"Надбавка за ненормированный день: {unregulated:.2f}%\n")
+        output_text.insert(tk.END, f"Начисленная зарплата: {gross:.2f} руб.\n")
+        output_text.insert(tk.END, f"Чистая зарплата (после налога): {net:.2f} руб.\n")
+        output_text.insert(tk.END, "-------------------------------------------\n")
+
+
+# Главный интерфейс
+root = tk.Tk()
+root.title("Штатное расписание")
+
+# Кнопки для добавления данных
+tk.Button(root, text="Добавить подразделение", command=add_department).pack(pady=5)
+tk.Button(root, text="Добавить штатную единицу", command=add_staff_unit).pack(pady=5)
+
+# Кнопка для расчета заработной платы
+tk.Button(root, text="Рассчитать заработную плату", command=calculate_salaries).pack(pady=10)
+
+# Поле для вывода результатов
+output_text = tk.Text(root, width=70, height=20)
+output_text.pack(padx=10, pady=10)
+
+# Запуск приложения
+root.mainloop()
+
+# Закрытие базы данных
+conn.close()
