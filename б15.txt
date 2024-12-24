@@ -1,0 +1,154 @@
+import sqlite3
+import tkinter as tk
+from tkinter import messagebox
+
+# Создание базы данных и подключение
+conn = sqlite3.connect('repair_work.db')
+cursor = conn.cursor()
+
+# Создание таблиц (если они не существуют)
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS employees (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    reward_percent REAL NOT NULL
+)
+''')
+
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS jobs (
+    id INTEGER PRIMARY KEY,
+    description TEXT NOT NULL,
+    cost REAL NOT NULL,
+    employee_id INTEGER NOT NULL,
+    completion_date TEXT NOT NULL,
+    FOREIGN KEY (employee_id) REFERENCES employees(id)
+)
+''')
+
+conn.commit()
+
+
+# Функция для добавления сотрудника
+def add_employee():
+    def save_employee():
+        name = name_entry.get()
+        reward_percent = reward_percent_entry.get()
+        if not name or not reward_percent:
+            messagebox.showerror("Ошибка", "Все поля должны быть заполнены!")
+            return
+        try:
+            reward_percent = float(reward_percent)
+            cursor.execute("INSERT INTO employees (name, reward_percent) VALUES (?, ?)", (name, reward_percent))
+            conn.commit()
+            messagebox.showinfo("Успех", "Сотрудник успешно добавлен!")
+            add_employee_window.destroy()
+        except ValueError:
+            messagebox.showerror("Ошибка", "Процент вознаграждения должен быть числом!")
+
+    add_employee_window = tk.Toplevel(root)
+    add_employee_window.title("Добавить сотрудника")
+
+    tk.Label(add_employee_window, text="Имя сотрудника:").pack(pady=5)
+    name_entry = tk.Entry(add_employee_window)
+    name_entry.pack(pady=5)
+
+    tk.Label(add_employee_window, text="Процент вознаграждения:").pack(pady=5)
+    reward_percent_entry = tk.Entry(add_employee_window)
+    reward_percent_entry.pack(pady=5)
+
+    tk.Button(add_employee_window, text="Сохранить", command=save_employee).pack(pady=10)
+
+
+# Функция для добавления работы
+def add_job():
+    def save_job():
+        description = description_entry.get()
+        cost = cost_entry.get()
+        employee_id = employee_id_entry.get()
+        completion_date = completion_date_entry.get()
+
+        if not description or not cost or not employee_id or not completion_date:
+            messagebox.showerror("Ошибка", "Все поля должны быть заполнены!")
+            return
+        try:
+            cost = float(cost)
+            employee_id = int(employee_id)
+            cursor.execute("INSERT INTO jobs (description, cost, employee_id, completion_date) VALUES (?, ?, ?, ?)",
+                           (description, cost, employee_id, completion_date))
+            conn.commit()
+            messagebox.showinfo("Успех", "Работа успешно добавлена!")
+            add_job_window.destroy()
+        except ValueError:
+            messagebox.showerror("Ошибка", "Стоимость и ID сотрудника должны быть числом!")
+
+    add_job_window = tk.Toplevel(root)
+    add_job_window.title("Добавить работу")
+
+    tk.Label(add_job_window, text="Описание работы:").pack(pady=5)
+    description_entry = tk.Entry(add_job_window)
+    description_entry.pack(pady=5)
+
+    tk.Label(add_job_window, text="Стоимость работы:").pack(pady=5)
+    cost_entry = tk.Entry(add_job_window)
+    cost_entry.pack(pady=5)
+
+    tk.Label(add_job_window, text="ID сотрудника:").pack(pady=5)
+    employee_id_entry = tk.Entry(add_job_window)
+    employee_id_entry.pack(pady=5)
+
+    tk.Label(add_job_window, text="Дата выполнения (YYYY-MM-DD):").pack(pady=5)
+    completion_date_entry = tk.Entry(add_job_window)
+    completion_date_entry.pack(pady=5)
+
+    tk.Button(add_job_window, text="Сохранить", command=save_job).pack(pady=10)
+
+
+# Функция для расчета вознаграждений сотрудников
+def calculate_rewards():
+    cursor.execute('''
+    SELECT employees.name, SUM(jobs.cost * employees.reward_percent) AS reward
+    FROM employees
+    JOIN jobs ON employees.id = jobs.employee_id
+    GROUP BY employees.id
+    ''')
+    return cursor.fetchall()
+
+
+# Функция для отображения данных
+def show_data():
+    rewards = calculate_rewards()
+
+    # Очищаем текстовое поле
+    output_text.delete(1.0, tk.END)
+
+    # Отображаем вознаграждения сотрудников
+    output_text.insert(tk.END, "Вознаграждения сотрудников:\n")
+    for name, reward in rewards:
+        output_text.insert(tk.END, f"Сотрудник: {name}, Вознаграждение: {reward:.2f} руб.\n")
+
+
+# Главное окно
+root = tk.Tk()
+root.title("Учет ремонтных работ")
+
+# Кнопки для добавления сотрудников и работ
+add_employee_button = tk.Button(root, text="Добавить сотрудника", command=add_employee)
+add_employee_button.pack(pady=10)
+
+add_job_button = tk.Button(root, text="Добавить работу", command=add_job)
+add_job_button.pack(pady=10)
+
+# Кнопка для отображения данных
+show_button = tk.Button(root, text="Показать вознаграждения", command=show_data)
+show_button.pack(pady=10)
+
+# Текстовое поле для отображения результатов
+output_text = tk.Text(root, width=50, height=15)
+output_text.pack(padx=10, pady=10)
+
+# Запуск приложения
+root.mainloop()
+
+# Закрытие соединения с базой данных
+conn.close()
