@@ -1,0 +1,40 @@
+import pymysql
+from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox
+
+# Функция для подключения к базе данных
+def get_db_connection():
+    conn = pymysql.connect(
+        host='localhost',          # Локальный хост
+        user='your_db_user',       # Ваш пользователь MySQL
+        password='your_db_password',  # Ваш пароль MySQL
+        database='your_db_name',   # Имя базы данных
+        port=3306                  # Порт (по умолчанию для MySQL)
+    )
+    return conn
+
+# Функция для получения пользователя по имени
+def get_user_by_username(username):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
+    user = cursor.fetchone()
+    conn.close()
+    return user
+
+# Функция для добавления документа
+def add_document(title, description, user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO documents (title, description, user_id, status) VALUES (%s, %s, %s, %s)", 
+                   (title, description, user_id, 'received'))
+    conn.commit()
+    conn.close()
+
+# Функция для получения документов пользователя
+def get_documents_for_user(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM documents WHERE user_id=%s", (user_id,))
+    documents = cursor.fetchall()
+    conn.close()
+    return documents
